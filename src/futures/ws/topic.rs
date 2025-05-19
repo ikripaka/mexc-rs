@@ -33,8 +33,7 @@ impl Topic {
 
     pub fn to_subscription_msg(&self) -> String {
         match self {
-            Topic::Depth(depth_topic) => serde_json::to_string(depth_topic)
-                .unwrap()
+            Topic::Depth(depth_topic) => serde_json::to_string(depth_topic).unwrap(),
         }
     }
 }

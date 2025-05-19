@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 pub enum ApiResponse<T> {
+    UnknownApiResponse(UnknownApiResponse<T>),
     Success(SuccessApiResponse<T>),
     Error(ErrorApiResponse),
 }
@@ -23,11 +24,32 @@ pub struct ErrorApiResponse {
     pub message: String,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnknownApiResponse<T> {
+    pub success: bool,
+    pub code: ErrorCode,
+    pub data: T,
+}
+
 impl<T> ApiResponse<T> {
     pub fn into_result(self) -> Result<T, ErrorApiResponse> {
         match self {
             Self::Success(output) => Ok(output.data),
             Self::Error(err) => Err(err),
+            Self::UnknownApiResponse(response) => {
+                if response.success {
+                    Ok(response.data)
+                } else {
+                    Err(ErrorApiResponse {
+                        code: response.code,
+                        message: format!(
+                            "Failed to gather response output, success: {}",
+                            response.success
+                        ),
+                    })
+                }
+            }
         }
     }
 
@@ -35,6 +57,19 @@ impl<T> ApiResponse<T> {
         match self {
             Self::Success(output) => Ok(output.data),
             Self::Error(response) => Err(ApiError::ErrorResponse(response)),
+            Self::UnknownApiResponse(response) => {
+                if response.success {
+                    Ok(response.data)
+                } else {
+                    Err(ApiError::ErrorResponse(ErrorApiResponse {
+                        code: response.code,
+                        message: format!(
+                            "Failed to gather response output, success: {}",
+                            response.success
+                        ),
+                    }))
+                }
+            }
         }
     }
 }
