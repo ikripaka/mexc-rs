@@ -18,6 +18,7 @@ use tokio_tungstenite::tungstenite::error::ProtocolError;
 use tokio_tungstenite::tungstenite::{Error, Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tokio_util::sync::CancellationToken;
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -106,7 +107,10 @@ impl AcquireWebsocketsForTopics for MexcSpotWebsocketClient {
             .for_topics
             .into_iter()
             .partition::<Vec<_>, _>(|topic| topic.requires_auth());
-
+        debug!(
+            "private topics: {:?}, public: {:?}",
+            private_topics, public_topics
+        );
         if params.auth.is_none() && !private_topics.is_empty() {
             return Err(AcquireWebsocketForTopicsError::RequestedTopicsRequireAuthentication);
         }
@@ -124,6 +128,7 @@ impl AcquireWebsocketsForTopics for MexcSpotWebsocketClient {
                     }
                 },
             };
+        debug!("Acquired websockets for {:?}", acquired_websockets);
 
         if let Some(auth) = params.auth {
             let private_acquired_websockets = match acquire_websockets_for_private_topics(self.clone(), &mut inner, &auth, private_topics)
@@ -141,9 +146,11 @@ impl AcquireWebsocketsForTopics for MexcSpotWebsocketClient {
                     }
                 }
             };
+            debug!("Acquired private ws: {:?}", private_acquired_websockets);
             acquired_websockets.extend(private_acquired_websockets);
         }
 
+        debug!("Acquired websockets for {:?}", acquired_websockets);
         Ok(AcquireWebsocketsForTopicsOutput {
             websockets: acquired_websockets,
         })
@@ -178,6 +185,8 @@ async fn acquire_websockets_for_public_topics(
         matching_websockets.push((websocket_entry.clone(), topics_facilitated_by_websocket));
     }
 
+    debug!("Available public websockets: {:?}", inner.websockets);
+
     let topics_not_covered_matching_websockets = public_topics
         .iter()
         .filter(|&topic| {
@@ -187,6 +196,11 @@ async fn acquire_websockets_for_public_topics(
         })
         .cloned()
         .collect::<Vec<_>>();
+
+    debug!(
+        "Topics not covered: {:?}",
+        topics_not_covered_matching_websockets
+    );
 
     if topics_not_covered_matching_websockets.is_empty() {
         // We can reuse the websocket(s) that we found.
@@ -308,6 +322,8 @@ async fn acquire_websockets_for_private_topics(
         matching_websockets.push((websocket_entry.clone(), topics_facilitated_by_websocket));
     }
 
+    debug!("Available private websockets: {:?}", inner.websockets);
+
     let topics_not_covered_matching_websockets = private_topics
         .iter()
         .filter(|&topic| {
@@ -317,6 +333,11 @@ async fn acquire_websockets_for_private_topics(
         })
         .cloned()
         .collect::<Vec<_>>();
+
+    debug!(
+        "Topics not covered: {:?}",
+        topics_not_covered_matching_websockets
+    );
 
     if topics_not_covered_matching_websockets.is_empty() {
         // We can reuse the websocket(s) that we found.
@@ -666,6 +687,7 @@ fn spawn_websocket_sender_task(
                         }
                     };
                     let json = serde_json::to_string(&message).expect("Failed to serialize message");
+                    debug!("Sending serialized message: {json}");
                     let message = Message::Text(json);
 
                     match ws_tx.send(message).await {

@@ -1,4 +1,15 @@
 use crate::futures::auth::{SignRequestParams, SignRequestParamsKind};
+use crate::futures::v1::endpoints::get_account_asset::GetAccountAsset;
+use crate::futures::v1::endpoints::get_account_assets::GetAccountAssets;
+use crate::futures::v1::endpoints::get_depth::GetDepth;
+use crate::futures::v1::endpoints::get_kline::GetKline;
+use crate::futures::v1::endpoints::get_open_orders::GetOpenOrders;
+use crate::futures::v1::endpoints::get_server_time::GetServerTime;
+use crate::futures::v1::endpoints::order::Order;
+use crate::futures::v1::endpoints::ticker::GetTicker;
+use crate::futures::ws::public_futures_ws::{
+    MexcFuturesWebsocketClient, MexcFuturesWebsocketClientTrait,
+};
 use chrono::Utc;
 
 pub mod auth;
@@ -28,6 +39,10 @@ pub struct MexcFuturesApiClient {
     endpoint: MexcFuturesApiEndpoint,
     reqwest_client: reqwest::Client,
 }
+
+pub trait MexcFuturesApiClientTrait: GetDepth + GetKline + GetServerTime + Send + Sync {}
+
+impl MexcFuturesApiClientTrait for MexcFuturesApiClient {}
 
 impl MexcFuturesApiClient {
     pub fn new(endpoint: MexcFuturesApiEndpoint) -> Self {
@@ -61,6 +76,16 @@ pub struct MexcFuturesApiClientWithAuthentication {
     api_key: String,
     secret_key: String,
 }
+
+// todo: add GetTicker trait
+pub trait MexcFuturesApiClientWithAuthenticationTrait:
+    MexcFuturesApiClientTrait + GetAccountAsset + GetAccountAssets + GetOpenOrders
+{
+}
+
+impl MexcFuturesApiClientTrait for MexcFuturesApiClientWithAuthentication {}
+
+impl MexcFuturesApiClientWithAuthenticationTrait for MexcFuturesApiClientWithAuthentication {}
 
 impl MexcFuturesApiClientWithAuthentication {
     pub fn new(endpoint: MexcFuturesApiEndpoint, api_key: String, secret_key: String) -> Self {

@@ -8,6 +8,7 @@ use crate::spot::ws::{MexcSpotWebsocketClient, SendableMessage};
 use async_channel::SendError;
 use async_trait::async_trait;
 use std::sync::Arc;
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct SubscribeParams {
@@ -129,6 +130,7 @@ impl Subscribe for MexcSpotWebsocketClient {
                 .iter()
                 .map(|topic| topic.to_topic_subscription_string())
                 .collect::<Vec<String>>();
+            debug!("params to send: {params:?}");
             let sendable_message = SendableMessage::Subscription(params);
 
             let tx = acquired_ws.websocket_entry.message_tx.read().await;

@@ -87,7 +87,7 @@ pub enum ApiError {
 // 6004 	The trading pair and status should be fill in
 // 6005 	The trading pair is not available
 
-#[derive(Debug, PartialEq, Eq, Hash, serde_repr::Deserialize_repr, strum_macros::IntoStaticStr)]
+#[derive(Debug, PartialEq, Eq, Hash, serde_repr::Deserialize_repr, strum::IntoStaticStr)]
 #[repr(i32)]
 pub enum ErrorCode {
     OperationSucceed = 0,

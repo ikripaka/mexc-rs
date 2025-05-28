@@ -5,6 +5,7 @@ use crate::futures::v1::models::{OpenType, OrderSide, OrderType, PositionMode};
 use crate::futures::MexcFuturesApiClientWithAuthentication;
 use async_trait::async_trait;
 use rust_decimal::Decimal;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct OrderParams<'a> {

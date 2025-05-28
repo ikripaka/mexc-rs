@@ -1,11 +1,9 @@
 use crate::futures::error::ApiError;
-use crate::futures::ws::message;
-use crate::futures::ws::message::RawMessage;
 use crate::futures::ws::public_futures_ws::{
     Inner, MexcFuturesWebsocketClient, SendableMessage, WebsocketEntry,
 };
-use crate::futures::ws::subscribe::SubscribeError;
 use crate::futures::ws::topic::Topic;
+use crate::futures::ws::{message, WebsocketAuth};
 use async_channel::Sender;
 use async_trait::async_trait;
 use futures::stream::{SplitSink, SplitStream};
@@ -25,6 +23,7 @@ const PING_DELAY_SEC: u64 = 30;
 #[derive(Debug)]
 pub(crate) struct AcquireWebsocketsForTopicsParams {
     pub for_topics: Vec<Topic>,
+    pub auth: Option<WebsocketAuth>,
 }
 
 #[derive(Debug)]
@@ -64,6 +63,36 @@ pub enum AcquireWebsocketsForPublicTopicsError {
     TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum AcquireWebsocketsForPrivateTopicsError {
+    #[error("Maximum amount of topics for user will be exceeded")]
+    MaximumAmountOfTopicsForUserWillBeExceeded,
+
+    #[error("Tungestenite error: {0}")]
+    TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
+
+    #[error("Could not create datastream (listen key)")]
+    CouldNotCreateDataStream(#[from] ApiError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CreatePrivateWebsocketError {
+    #[error("Maximum amount of topics for user will be exceeded")]
+    MaximumAmountOfTopicsForUserWillBeExceeded,
+
+    #[error("Tungestenite error: {0}")]
+    TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
+
+    #[error("Could not create datastream (listen key)")]
+    CouldNotCreateDataStream(#[from] ApiError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CreatePublicWebsocketError {
+    #[error("Tungestenite error: {0}")]
+    TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
+}
+
 #[async_trait]
 pub(crate) trait AcquireWebsocketsForTopics {
     async fn acquire_websockets_for_topics(
@@ -78,10 +107,14 @@ impl AcquireWebsocketsForTopics for MexcFuturesWebsocketClient {
         self: Arc<Self>,
         params: AcquireWebsocketsForTopicsParams,
     ) -> Result<AcquireWebsocketsForTopicsOutput, AcquireWebsocketForTopicsError> {
-        let (_private_topics, public_topics) = params
+        let (private_topics, public_topics) = params
             .for_topics
             .into_iter()
             .partition::<Vec<_>, _>(|topic| topic.requires_auth());
+
+        if params.auth.is_none() && !private_topics.is_empty() {
+            return Err(AcquireWebsocketForTopicsError::RequestedTopicsRequireAuthentication);
+        }
 
         let mut inner_locked = self.inner.write().await;
 
@@ -100,6 +133,26 @@ impl AcquireWebsocketsForTopics for MexcFuturesWebsocketClient {
             },
         };
 
+        if let Some(auth) = params.auth {
+            let private_acquired_websockets = match acquire_websockets_for_private_topics(self.clone(), &mut inner_locked, &auth, private_topics)
+                .await {
+                Ok(x) => x,
+                Err(err) => match err {
+                    AcquireWebsocketsForPrivateTopicsError::MaximumAmountOfTopicsForUserWillBeExceeded => {
+                        return Err(AcquireWebsocketForTopicsError::MaximumAmountOfTopicsForUserWillBeExceeded);
+                    }
+                    AcquireWebsocketsForPrivateTopicsError::TungesteniteError(err) => {
+                        return Err(AcquireWebsocketForTopicsError::TungesteniteError(err));
+                    }
+                    AcquireWebsocketsForPrivateTopicsError::CouldNotCreateDataStream(err) => {
+                        return Err(AcquireWebsocketForTopicsError::CouldNotCreateDataStream(err));
+                    }
+                }
+            };
+            debug!("Acquired private ws: {:?}", private_acquired_websockets);
+            acquired_websockets.extend(private_acquired_websockets);
+        }
+
         Ok(AcquireWebsocketsForTopicsOutput {
             websockets: acquired_websockets,
         })
@@ -114,11 +167,19 @@ impl Default for AcquireWebsocketsForTopicsParams {
 
 impl AcquireWebsocketsForTopicsParams {
     pub fn new(topics: Vec<Topic>) -> Self {
-        Self { for_topics: topics }
+        Self {
+            for_topics: topics,
+            auth: None,
+        }
     }
 
     pub fn for_topics(mut self, topics: Vec<Topic>) -> Self {
         self.for_topics.extend(topics);
+        self
+    }
+
+    pub fn with_auth(mut self, auth: WebsocketAuth) -> Self {
+        self.auth = Some(auth);
         self
     }
 }
@@ -232,34 +293,135 @@ async fn acquire_websockets_for_public_topics(
         .collect())
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum AcquireWebsocketsForPrivateTopicsError {
-    #[error("Maximum amount of topics for user will be exceeded")]
-    MaximumAmountOfTopicsForUserWillBeExceeded,
+async fn acquire_websockets_for_private_topics(
+    this: Arc<MexcFuturesWebsocketClient>,
+    inner: &mut Inner,
+    auth: &WebsocketAuth,
+    private_topics: Vec<Topic>,
+) -> Result<Vec<AcquiredWebsocket>, AcquireWebsocketsForPrivateTopicsError> {
+    // Look for existing websockets with the same auth, that have a subscription to one or more of
+    // these topics.
+    // If we find one, we can reuse it.
+    // Otherwise, we have to set up a new websocket that we could subscribe/unsubscribe to.
+    // We can assume once we find a topic for a websocket with the same auth, that there won't be
+    // any other left
+    let mut matching_websockets = vec![];
+    for websocket_entry in inner.websockets.iter() {
+        if websocket_entry.auth.as_ref() != Some(auth) {
+            continue;
+        }
+        let topics = websocket_entry.topics.read().await;
+        let topics_facilitated_by_websocket = topics
+            .iter()
+            .filter(|&t| private_topics.contains(t))
+            .cloned()
+            .collect::<Vec<_>>();
+        if topics_facilitated_by_websocket.is_empty() {
+            continue;
+        }
+        matching_websockets.push((websocket_entry.clone(), topics_facilitated_by_websocket));
+    }
 
-    #[error("Tungestenite error: {0}")]
-    TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
+    debug!("Available private websockets: {:?}", inner.websockets);
 
-    #[error("Could not create datastream (listen key)")]
-    CouldNotCreateDataStream(#[from] ApiError),
-}
+    let topics_not_covered_matching_websockets = private_topics
+        .iter()
+        .filter(|&topic| {
+            matching_websockets
+                .iter()
+                .all(|(_, topics)| !topics.contains(topic))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
 
-#[derive(Debug, thiserror::Error)]
-pub enum CreatePrivateWebsocketError {
-    #[error("Maximum amount of topics for user will be exceeded")]
-    MaximumAmountOfTopicsForUserWillBeExceeded,
+    debug!(
+        "Topics not covered: {:?}",
+        topics_not_covered_matching_websockets
+    );
 
-    #[error("Tungestenite error: {0}")]
-    TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
+    if topics_not_covered_matching_websockets.is_empty() {
+        // We can reuse the websocket(s) that we found.
+        return Ok(matching_websockets
+            .into_iter()
+            .map(|(ws_entry, topics)| AcquiredWebsocket {
+                websocket_entry: ws_entry,
+                for_topics: topics.iter().map(|t| (*t).clone()).collect::<Vec<Topic>>(),
+            })
+            .collect());
+    }
 
-    #[error("Could not create datastream (listen key)")]
-    CouldNotCreateDataStream(#[from] ApiError),
-}
+    // Check whether one of the websockets have enough space to accommodate the topics.
+    let mut websocket_that_can_accommodate = None;
+    for websocket in inner.websockets.iter() {
+        if websocket.auth.as_ref() == Some(auth)
+            && websocket.topics.read().await.len() + private_topics.len() <= 30
+        {
+            websocket_that_can_accommodate = Some(websocket.clone());
+            break;
+        }
+    }
 
-#[derive(Debug, thiserror::Error)]
-pub enum CreatePublicWebsocketError {
-    #[error("Tungestenite error: {0}")]
-    TungesteniteError(#[from] tokio_tungstenite::tungstenite::Error),
+    if let Some(websocket_entry) = websocket_that_can_accommodate {
+        // Check whether this websocket is part of the matching websockets via id
+        if matching_websockets
+            .iter()
+            .any(|(matching_websocket, _)| matching_websocket.id == websocket_entry.id)
+        {
+            // This is an already matching websocket
+            return Ok(matching_websockets
+                .into_iter()
+                .map(|(ws_entry, topics)| {
+                    let mut for_topics =
+                        topics.iter().map(|t| (*t).clone()).collect::<Vec<Topic>>();
+                    if ws_entry.id == websocket_entry.id {
+                        // Extend this websocket with the topics that are not yet covered
+                        for_topics.extend(topics_not_covered_matching_websockets.iter().cloned());
+                    }
+                    AcquiredWebsocket {
+                        websocket_entry: ws_entry,
+                        for_topics,
+                    }
+                })
+                .collect());
+        } else {
+            // This is another socket which we can put the topics onto
+            return Ok([(websocket_entry, topics_not_covered_matching_websockets)]
+                .into_iter()
+                .chain(matching_websockets.into_iter())
+                .map(|(ws_entry, topics)| AcquiredWebsocket {
+                    websocket_entry: ws_entry,
+                    for_topics: topics.iter().map(|t| (*t).clone()).collect::<Vec<Topic>>(),
+                })
+                .collect());
+        }
+    }
+
+    // Create new websocket for the topics
+    let websocket_entry = match create_private_websocket(this.clone(), inner, auth.clone()).await {
+        Ok(x) => x,
+        Err(err) => match err {
+            CreatePrivateWebsocketError::MaximumAmountOfTopicsForUserWillBeExceeded => {
+                return Err(AcquireWebsocketsForPrivateTopicsError::MaximumAmountOfTopicsForUserWillBeExceeded);
+            }
+            CreatePrivateWebsocketError::TungesteniteError(err) => {
+                return Err(AcquireWebsocketsForPrivateTopicsError::TungesteniteError(
+                    err,
+                ));
+            }
+            CreatePrivateWebsocketError::CouldNotCreateDataStream(err) => {
+                return Err(AcquireWebsocketsForPrivateTopicsError::CouldNotCreateDataStream(err));
+            }
+        },
+    };
+
+    Ok([(websocket_entry, topics_not_covered_matching_websockets)]
+        .into_iter()
+        .chain(matching_websockets.into_iter())
+        .map(|(ws_entry, topics)| AcquiredWebsocket {
+            websocket_entry: ws_entry,
+            for_topics: topics.iter().map(|t| (*t).clone()).collect::<Vec<Topic>>(),
+        })
+        .collect())
 }
 
 async fn create_public_websocket(
@@ -294,7 +456,69 @@ async fn create_public_websocket(
 
     let websocket_entry = WebsocketEntry {
         id: websocket_id,
+        auth: None,
         listen_key: None,
+        topics: Arc::new(RwLock::new(vec![])),
+        message_tx: Arc::new(RwLock::new(tx)),
+    };
+    let websocket_entry = Arc::new(websocket_entry);
+    inner.websockets.push(websocket_entry.clone());
+
+    Ok(websocket_entry)
+}
+
+async fn create_private_websocket(
+    this: Arc<MexcFuturesWebsocketClient>,
+    inner: &mut Inner,
+    auth: WebsocketAuth,
+) -> Result<Arc<WebsocketEntry>, CreatePrivateWebsocketError> {
+    // Check whether we can create a new websocket for the topics
+    let amount_of_websockets_for_auth = inner
+        .websockets
+        .iter()
+        .filter(|websocket| websocket.auth.as_ref() == Some(&auth))
+        .count();
+    if amount_of_websockets_for_auth >= 5 {
+        return Err(CreatePrivateWebsocketError::MaximumAmountOfTopicsForUserWillBeExceeded);
+    }
+
+    debug!("Creating listen key for private websocket...");
+
+    let endpoint_str = this.ws_endpoint.to_string();
+    let (ws_stream, _) = tokio_tungstenite::connect_async(&endpoint_str).await?;
+    let (ws_tx, ws_rx) = ws_stream.split();
+    let (tx, rx) = async_channel::unbounded();
+
+    let cancellation_token = CancellationToken::new();
+
+    let websocket_id = Uuid::new_v4();
+
+    // Spawn all necessary tasks for this websocket...
+    spawn_websocket_sender_task(
+        this.clone(),
+        ws_tx,
+        rx,
+        cancellation_token.clone(),
+        websocket_id,
+    );
+    spawn_websocket_receiver_task(
+        this.clone(),
+        ws_rx,
+        cancellation_token.clone(),
+        websocket_id,
+    );
+    spawn_websocket_ping_task(tx.clone(), cancellation_token.clone());
+
+    // inner
+    //     .auth_to_listen_key_map
+    //     .insert(auth.clone(), user_data_stream_output.listen_key.clone());
+    // send message to login
+
+    let websocket_entry = WebsocketEntry {
+        id: websocket_id,
+        auth: Some(auth),
+        listen_key: None,
+        // Some(user_data_stream_output.listen_key),
         topics: Arc::new(RwLock::new(vec![])),
         message_tx: Arc::new(RwLock::new(tx)),
     };
@@ -405,10 +629,13 @@ fn spawn_websocket_sender_task(
                         }
                     };
                     let json = {
-                      if let SendableMessage::Subscribe(topics) = message {
-                            topics
-                        }  else{
-                            serde_json::to_string(&message).expect("Failed to serialize message")
+                        match message{
+                            SendableMessage::Subscribe(msg) | SendableMessage::Login(msg) | SendableMessage::Order(msg) => {
+                              msg
+                            }
+                            _ => {
+                              serde_json::to_string(&message).expect("Failed to serialize message")
+                            }
                         }
                     };
                     let message = Message::Text(json);

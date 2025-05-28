@@ -1,6 +1,7 @@
-use crate::futures::ws::endpoint::MexcFuturesWebsocketEndpoint;
-use crate::futures::ws::message::Message;
-use crate::futures::ws::topic::Topic;
+use crate::futures::ws::{
+    endpoint::MexcFuturesWebsocketEndpoint, message::Message, stream::Stream, subscribe::Subscribe,
+    topic::Topic, WebsocketAuth,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -10,6 +11,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct WebsocketEntry {
     pub id: Uuid,
+    pub auth: Option<WebsocketAuth>,
     pub listen_key: Option<String>,
     pub topics: Arc<RwLock<Vec<Topic>>>,
     pub message_tx: Arc<RwLock<async_channel::Sender<SendableMessage>>>,
@@ -34,7 +36,12 @@ pub enum SendableMessage {
     Subscribe(String),
     Unsubscribe(String),
     Ping,
+    Login(String),
+    Order(String),
 }
+
+pub trait MexcFuturesWebsocketClientTrait: Default + Stream + Subscribe + Send + Sync {}
+impl MexcFuturesWebsocketClientTrait for MexcFuturesWebsocketClient {}
 
 impl MexcFuturesWebsocketClient {
     pub fn new_with_endpoints(ws_endpoint: MexcFuturesWebsocketEndpoint) -> Self {

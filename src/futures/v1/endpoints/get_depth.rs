@@ -1,5 +1,6 @@
 use crate::futures::response::ApiResponse;
 use crate::futures::result::ApiResult;
+use crate::futures::ws::message::{PriceQuantity, PriceQuantityEnum};
 use crate::futures::{
     MexcFuturesApiClient, MexcFuturesApiClientWithAuthentication, MexcFuturesApiEndpoint,
 };
@@ -25,29 +26,16 @@ struct RawDepth {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(untagged)]
-pub enum PriceQuantityEnum {
-    PriceQuantity(Decimal, Decimal),
-    PriceQuantityOrders(Decimal, Decimal, u64),
-}
-
 #[derive(Debug, Clone)]
 pub struct Depth {
-    asks: Vec<PriceQuantity>,
-    bids: Vec<PriceQuantity>,
-    version: u64,
+    pub asks: Vec<PriceQuantity>,
+    pub bids: Vec<PriceQuantity>,
+    pub version: u64,
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
-pub struct PriceQuantity {
-    pub price: Decimal,
-    pub quantity: u64,
-}
-
 pub struct DepthParams {
-    pub symbol: &'static str,
+    pub symbol: String,
     pub limit: Option<u64>,
 }
 
@@ -56,38 +44,8 @@ impl From<RawDepth> for Depth {
         Self {
             asks: value.asks.iter().map(|x| x.into()).collect(),
             bids: value.bids.iter().map(|x| x.into()).collect(),
-            version: 0,
+            version: value.version,
             timestamp: Default::default(),
-        }
-    }
-}
-
-impl From<PriceQuantityEnum> for PriceQuantity {
-    fn from(value: PriceQuantityEnum) -> Self {
-        match value {
-            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity {
-                price,
-                quantity: quantity.to_u64().unwrap(),
-            },
-            PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantity {
-                price,
-                quantity: quantity.to_u64().unwrap() * order,
-            },
-        }
-    }
-}
-
-impl From<&PriceQuantityEnum> for PriceQuantity {
-    fn from(value: &PriceQuantityEnum) -> Self {
-        match value {
-            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity {
-                price: *price,
-                quantity: quantity.to_u64().unwrap(),
-            },
-            PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantity {
-                price: *price,
-                quantity: quantity.to_u64().unwrap() * order,
-            },
         }
     }
 }

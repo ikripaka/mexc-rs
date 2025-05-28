@@ -18,32 +18,32 @@ ws = []
 
 [dependencies]
 chrono = { version = "0.4.26", features = ["serde"] }
-serde = { version = "1.0.180", features = ["derive"] }
-serde_json = "1.0.104"
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
-futures = "0.3.28"
-tracing = "0.1.37"
-thiserror = "1.0.44"
-tokio-tungstenite = { version = "0.20.0", features = ["native-tls"] }
-reqwest = { version = "0.11.18", features = ["json"] }
-rust_decimal = { version = "1.31.0", features = ["serde"] }
-async-trait = "0.1.72"
-serde_path_to_error = "0.1.14"
-dotenv = "0.15.0"
-serde_urlencoded = "0.7.1"
-hmac = "0.12.1"
-sha2 = "0.10.7"
-hex = "0.4.3"
-serde_repr = "0.1.16"
-strum_macros = "0.25.1"
-strum = "0.25.0"
-async-stream = "0.3.5"
-tracing-subscriber = "0.3.17"
 anyhow = "1.0.72"
+async-channel = "1.9.0"
+async-stream = "0.3.5"
+async-trait = "0.1.72"
+dotenv = "0.15.0"
+futures = "0.3.28"
+hmac = "0.12.1"
+hex = "0.4.3"
 num = "0.4.1"
 num-derive = "0.4.0"
 num-traits = "0.2.16"
-tokio-util = "0.7.8"
-async-channel = "1.9.0"
+reqwest = { version = "0.11.18", features = ["json"] }
+rust_decimal = { version = "1.31.0", features = ["serde"] }
+serde = { version = "1.0.180", features = ["derive"] }
+serde_json = "1.0.104"
+serde_path_to_error = "0.1.14"
+serde_repr = "0.1.16"
+serde_urlencoded = "0.7.1"
 serde_with = "3.1.0"
+sha2 = "0.10.7"
+strum = { version = "0.27", features = ["derive"] }
+thiserror = "1.0.44"
+tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
+tokio-tungstenite = { version = "0.20.0", features = ["native-tls"] }
+tokio-util = "0.7.8"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+url = {version = "2.5.4"}
 uuid = { version = "1.4.1", features = ["v4"] }

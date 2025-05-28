@@ -164,7 +164,7 @@ impl TryFrom<ErrorResponseStringifiedCode> for ErrorResponse {
     Eq,
     Hash,
     serde_repr::Deserialize_repr,
-    strum_macros::IntoStaticStr,
+    strum::IntoStaticStr,
     num_derive::FromPrimitive,
 )]
 #[repr(i32)]

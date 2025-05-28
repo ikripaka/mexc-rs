@@ -5,16 +5,24 @@ use std::convert::TryFrom;
 
 #[derive(Debug)]
 pub enum Message {
-    Depth(AccountDepthMsg),
+    DepthWithoutBounds(AccountDepthWithoutBoundsMsg),
+    DepthWithBounds(AccountDepthWithBoundsMsg),
     Notification(NotificationMsg),
 }
 
 #[derive(Debug, Clone)]
-pub struct AccountDepthMsg {
+pub struct AccountDepthWithoutBoundsMsg {
     pub asks: Vec<PriceQuantity>,
     pub bids: Vec<PriceQuantity>,
     pub begin: u64,
     pub end: u64,
+    pub version: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountDepthWithBoundsMsg {
+    pub asks: Vec<PriceQuantity>,
+    pub bids: Vec<PriceQuantity>,
     pub version: u64,
 }
 
@@ -64,11 +72,16 @@ pub(crate) enum RawChannelMessageData {
 #[serde(untagged)]
 #[allow(dead_code)]
 pub(crate) enum RawEventChannelMsgData {
-    Depth {
+    DepthWithoutBounds {
         asks: Vec<PriceQuantityEnum>,
         bids: Vec<PriceQuantityEnum>,
         end: u64,
         begin: u64,
+        version: u64,
+    },
+    DepthWithBounds {
+        asks: Vec<PriceQuantityEnum>,
+        bids: Vec<PriceQuantityEnum>,
         version: u64,
     },
 }
@@ -76,14 +89,14 @@ pub(crate) enum RawEventChannelMsgData {
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 pub enum PriceQuantityEnum {
-    PriceQuantity(Decimal, Decimal),
-    PriceQuantityOrders(Decimal, Decimal, u64),
+    PriceQuantity(f64, f64),
+    PriceQuantityOrders(f64, f64, u64),
 }
 
 #[derive(Debug, Clone)]
 pub struct PriceQuantity {
-    pub price: Decimal,
-    pub quantity: u64,
+    pub price: f64,
+    pub quantity: f64,
 }
 
 impl TryFrom<&RawMessage> for Message {
@@ -102,7 +115,7 @@ impl TryFrom<&RawMessage> for Message {
 impl From<&RawEventChannelMsgData> for Message {
     fn from(value: &RawEventChannelMsgData) -> Self {
         match value {
-            RawEventChannelMsgData::Depth {
+            RawEventChannelMsgData::DepthWithoutBounds {
                 asks,
                 bids,
                 version,
@@ -111,11 +124,24 @@ impl From<&RawEventChannelMsgData> for Message {
             } => {
                 let asks = asks.iter().map(|x| PriceQuantity::from(x)).collect();
                 let bids = bids.iter().map(|x| PriceQuantity::from(x)).collect();
-                Message::Depth(AccountDepthMsg {
+                Message::DepthWithoutBounds(AccountDepthWithoutBoundsMsg {
                     asks,
                     bids,
                     begin: *begin,
                     end: *end,
+                    version: *version,
+                })
+            }
+            RawEventChannelMsgData::DepthWithBounds {
+                asks,
+                bids,
+                version,
+            } => {
+                let asks = asks.iter().map(|x| PriceQuantity::from(x)).collect();
+                let bids = bids.iter().map(|x| PriceQuantity::from(x)).collect();
+                Message::DepthWithBounds(AccountDepthWithBoundsMsg {
+                    asks,
+                    bids,
                     version: *version,
                 })
             }
@@ -144,13 +170,10 @@ impl From<&RawNotificationMsg> for Message {
 impl From<PriceQuantityEnum> for PriceQuantity {
     fn from(value: PriceQuantityEnum) -> Self {
         match value {
-            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity {
-                price,
-                quantity: quantity.floor().to_u64().unwrap(),
-            },
+            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity { price, quantity },
             PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantity {
                 price,
-                quantity: quantity.floor().to_u64().unwrap() * order,
+                quantity: quantity * order as f64,
             },
         }
     }
@@ -161,11 +184,11 @@ impl From<&PriceQuantityEnum> for PriceQuantity {
         match value {
             PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity {
                 price: *price,
-                quantity: quantity.floor().to_u64().unwrap(),
+                quantity: *quantity,
             },
             PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantity {
                 price: *price,
-                quantity: quantity.floor().to_u64().unwrap() * order,
+                quantity: quantity * *order as f64,
             },
         }
     }
@@ -177,7 +200,7 @@ mod tests {
 
     #[test]
     fn raw_message_depth() {
-        let json = r#"{"symbol":"BTC_USDT","data":{"asks":[[103116.1,89918,2]],"bids":[[103115.4,99835,2],[103115.5,100190,2],[9.75E+4,25329.000000000000000000000000000000,58]],"end":25133684088,"begin":25133684085,"version":25133684088},"channel":"push.depth","ts":1747645131820}"#;
+        let json = r#"{"symbol":"BTC_USDT","data":{"asks":[[105254.2,82164,2],[105254.3,76356,1],[105254.4,70649,1],[105254.5,82216,2],[105254.6,102277,2],[105254.7,79841,1]],"bids":[[105254.1,77560,1],[105254,90450,2]],"version":25158748435},"channel":"push.depth.full","ts":1747759465526}"#;
         let deserializer = &mut serde_json::Deserializer::from_str(json);
 
         let result: Result<RawChannelMsg, _> = serde_path_to_error::deserialize(deserializer);

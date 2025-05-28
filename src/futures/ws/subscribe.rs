@@ -4,6 +4,7 @@ use crate::futures::ws::acquire_websocket::{
 };
 use crate::futures::ws::public_futures_ws::{MexcFuturesWebsocketClient, SendableMessage};
 use crate::futures::ws::topic::Topic;
+use crate::futures::ws::WebsocketAuth;
 use async_channel::SendError;
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use tracing::trace;
 #[derive(Debug)]
 pub struct SubscribeParams {
     pub topics: Vec<Topic>,
+    pub auth: Option<WebsocketAuth>,
 }
 
 impl Default for SubscribeParams {
@@ -22,7 +24,12 @@ impl Default for SubscribeParams {
 
 impl SubscribeParams {
     pub fn new(topics: Vec<Topic>) -> Self {
-        Self { topics }
+        Self { topics, auth: None }
+    }
+
+    pub fn with_auth(mut self, auth: WebsocketAuth) -> Self {
+        self.auth = Some(auth);
+        self
     }
 
     pub fn with_topic(mut self, topic: Topic) -> Self {
@@ -95,8 +102,11 @@ impl Subscribe for MexcFuturesWebsocketClient {
         self: Arc<Self>,
         params: SubscribeParams,
     ) -> Result<SubscribeOutput, SubscribeError> {
-        let acquire_websocket_params =
+        let mut acquire_websocket_params =
             AcquireWebsocketsForTopicsParams::default().for_topics(params.topics);
+        if let Some(auth) = params.auth.as_ref() {
+            acquire_websocket_params = acquire_websocket_params.with_auth(auth.clone());
+        }
         let acquire_output = match self
             .clone()
             .acquire_websockets_for_topics(acquire_websocket_params)
@@ -107,16 +117,27 @@ impl Subscribe for MexcFuturesWebsocketClient {
         };
 
         for acquired_ws in acquire_output.websockets.into_iter() {
-            let params = acquired_ws
+            let local_params = acquired_ws
                 .for_topics
                 .iter()
-                .map(|topic| topic.to_subscription_msg())
-                .collect::<Vec<String>>();
+                .map(|topic| (topic.clone(), topic.to_subscription_msg()))
+                .collect::<Vec<(Topic, String)>>();
 
-            for x in params {
+            for (t, x) in local_params {
+                let tx = acquired_ws.websocket_entry.message_tx.read().await;
+                if t.requires_auth() {
+                    if let Some(auth) = params.auth.as_ref() {
+                        let sendable_message = SendableMessage::Login(
+                            auth.to_login_msg().expect("Failed to get login msg"),
+                        );
+                        trace!("Sending subscription msg: {:?}", sendable_message);
+                        tx.send(sendable_message).await?;
+                    }
+                }
+
+                // todo: in authenticated requests we don't have to subscribe right after logging in
                 let sendable_message = SendableMessage::Subscribe(x);
                 trace!("Sending subscription msg: {:?}", sendable_message);
-                let tx = acquired_ws.websocket_entry.message_tx.read().await;
                 tx.send(sendable_message).await?;
             }
 
