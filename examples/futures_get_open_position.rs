@@ -4,7 +4,9 @@ use mexc_rs::futures::{MexcFuturesApiClientWithAuthentication, MexcFuturesApiEnd
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var("RUST_LOG", "mexc_rs=debug,futures_get_open_position=trace");
+    unsafe {
+        std::env::set_var("RUST_LOG", "mexc_rs=debug,futures_get_open_position=trace");
+    }
     tracing_subscriber::fmt::init();
 
     dotenv().ok();

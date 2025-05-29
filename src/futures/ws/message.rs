@@ -12,8 +12,8 @@ pub enum Message {
 
 #[derive(Debug, Clone)]
 pub struct AccountDepthWithoutBoundsMsg {
-    pub asks: Vec<PriceQuantity>,
-    pub bids: Vec<PriceQuantity>,
+    pub asks: Vec<PriceQuantityFut>,
+    pub bids: Vec<PriceQuantityFut>,
     pub begin: u64,
     pub end: u64,
     pub version: u64,
@@ -21,8 +21,8 @@ pub struct AccountDepthWithoutBoundsMsg {
 
 #[derive(Debug, Clone)]
 pub struct AccountDepthWithBoundsMsg {
-    pub asks: Vec<PriceQuantity>,
-    pub bids: Vec<PriceQuantity>,
+    pub asks: Vec<PriceQuantityFut>,
+    pub bids: Vec<PriceQuantityFut>,
     pub version: u64,
 }
 
@@ -94,7 +94,7 @@ pub enum PriceQuantityEnum {
 }
 
 #[derive(Debug, Clone)]
-pub struct PriceQuantity {
+pub struct PriceQuantityFut {
     pub price: f64,
     pub quantity: f64,
 }
@@ -122,8 +122,8 @@ impl From<&RawEventChannelMsgData> for Message {
                 end,
                 begin,
             } => {
-                let asks = asks.iter().map(|x| PriceQuantity::from(x)).collect();
-                let bids = bids.iter().map(|x| PriceQuantity::from(x)).collect();
+                let asks = asks.iter().map(|x| PriceQuantityFut::from(x)).collect();
+                let bids = bids.iter().map(|x| PriceQuantityFut::from(x)).collect();
                 Message::DepthWithoutBounds(AccountDepthWithoutBoundsMsg {
                     asks,
                     bids,
@@ -137,8 +137,8 @@ impl From<&RawEventChannelMsgData> for Message {
                 bids,
                 version,
             } => {
-                let asks = asks.iter().map(|x| PriceQuantity::from(x)).collect();
-                let bids = bids.iter().map(|x| PriceQuantity::from(x)).collect();
+                let asks = asks.iter().map(|x| PriceQuantityFut::from(x)).collect();
+                let bids = bids.iter().map(|x| PriceQuantityFut::from(x)).collect();
                 Message::DepthWithBounds(AccountDepthWithBoundsMsg {
                     asks,
                     bids,
@@ -167,11 +167,13 @@ impl From<&RawNotificationMsg> for Message {
     }
 }
 
-impl From<PriceQuantityEnum> for PriceQuantity {
+impl From<PriceQuantityEnum> for PriceQuantityFut {
     fn from(value: PriceQuantityEnum) -> Self {
         match value {
-            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity { price, quantity },
-            PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantity {
+            PriceQuantityEnum::PriceQuantity(price, quantity) => {
+                PriceQuantityFut { price, quantity }
+            }
+            PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantityFut {
                 price,
                 quantity: quantity * order as f64,
             },
@@ -179,14 +181,14 @@ impl From<PriceQuantityEnum> for PriceQuantity {
     }
 }
 
-impl From<&PriceQuantityEnum> for PriceQuantity {
+impl From<&PriceQuantityEnum> for PriceQuantityFut {
     fn from(value: &PriceQuantityEnum) -> Self {
         match value {
-            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantity {
+            PriceQuantityEnum::PriceQuantity(price, quantity) => PriceQuantityFut {
                 price: *price,
                 quantity: *quantity,
             },
-            PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantity {
+            PriceQuantityEnum::PriceQuantityOrders(price, quantity, order) => PriceQuantityFut {
                 price: *price,
                 quantity: quantity * *order as f64,
             },

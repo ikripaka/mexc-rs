@@ -1,6 +1,6 @@
 use crate::futures::response::ApiResponse;
 use crate::futures::result::ApiResult;
-use crate::futures::ws::message::{PriceQuantity, PriceQuantityEnum};
+use crate::futures::ws::message::{PriceQuantityEnum, PriceQuantityFut};
 use crate::futures::{
     MexcFuturesApiClient, MexcFuturesApiClientWithAuthentication, MexcFuturesApiEndpoint,
 };
@@ -28,8 +28,8 @@ struct RawDepth {
 
 #[derive(Debug, Clone)]
 pub struct Depth {
-    pub asks: Vec<PriceQuantity>,
-    pub bids: Vec<PriceQuantity>,
+    pub asks: Vec<PriceQuantityFut>,
+    pub bids: Vec<PriceQuantityFut>,
     pub version: u64,
     pub timestamp: DateTime<Utc>,
 }

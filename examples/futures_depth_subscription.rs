@@ -7,10 +7,12 @@ use mexc_rs::futures::ws::topic::{DepthTopic, Topic};
 
 #[tokio::main]
 async fn main() {
-    std::env::set_var(
-        "RUST_LOG",
-        "mexc_rs=debug,spot_simple_private_subscription=trace",
-    );
+    unsafe {
+        std::env::set_var(
+            "RUST_LOG",
+            "mexc_rs=debug,spot_simple_private_subscription=trace",
+        );
+    }
     tracing_subscriber::fmt::init();
 
     let ws_client = MexcFuturesWebsocketClient::default().into_arc();

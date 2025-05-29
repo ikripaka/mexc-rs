@@ -1,4 +1,5 @@
 use crate::spot::SignQueryError;
+use chrono::{DateTime, Utc};
 use num_traits::FromPrimitive;
 use reqwest::StatusCode;
 use std::fmt::{Display, Formatter};
@@ -87,6 +88,7 @@ impl From<reqwest::Error> for ApiError {
 #[serde(untagged)]
 pub enum ApiResponse<T> {
     Success(T),
+    SuccessWithTimestamp(SuccessWithTimestamp<T>),
     Error(ErrorResponse),
     ErrorStringifiedCode(ErrorResponseStringifiedCode),
 }
@@ -95,6 +97,7 @@ impl<T> ApiResponse<T> {
     pub fn into_result(self) -> Result<T, ErrorResponse> {
         match self {
             Self::Success(output) => Ok(output),
+            Self::SuccessWithTimestamp(output) => Ok(output.data),
             Self::Error(err) => Err(err),
             Self::ErrorStringifiedCode(esc) => {
                 Err(esc.try_into().map_err(|_err| ErrorResponse {
@@ -109,6 +112,7 @@ impl<T> ApiResponse<T> {
     pub fn into_api_result(self) -> ApiResult<T> {
         match self {
             Self::Success(output) => Ok(output),
+            Self::SuccessWithTimestamp(output) => Ok(output.data),
             Self::Error(response) => Err(ApiError::ErrorResponse(response)),
             Self::ErrorStringifiedCode(esc) => {
                 Err(ApiError::ErrorResponse(esc.try_into().map_err(|_err| {
@@ -121,6 +125,14 @@ impl<T> ApiResponse<T> {
             }
         }
     }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SuccessWithTimestamp<T> {
+    #[serde(flatten)]
+    pub data: T,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, serde::Deserialize)]

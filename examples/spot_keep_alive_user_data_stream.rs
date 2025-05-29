@@ -7,10 +7,12 @@ use mexc_rs::spot::{MexcSpotApiClientWithAuthentication, MexcSpotApiEndpoint};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var(
-        "RUST_LOG",
-        "mexc_rs=debug,spot_keep_alive_user_data_stream=trace",
-    );
+    unsafe {
+        std::env::set_var(
+            "RUST_LOG",
+            "mexc_rs=debug,spot_keep_alive_user_data_stream=trace",
+        );
+    }
     tracing_subscriber::fmt::init();
 
     dotenv().ok();

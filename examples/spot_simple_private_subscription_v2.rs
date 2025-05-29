@@ -9,12 +9,12 @@ use mexc_rs::spot::ws::MexcSpotWebsocketClient;
 
 #[tokio::main]
 async fn main() {
-    std::env::set_var(
-        "RUST_LOG", "trace",
-        // "mexc_rs=debug,spot_simple_private_subscription=trace",
-    );
-    std::env::set_var("MEXC_API_KEY", "mx0vglMNhoefH3uXEj");
-    std::env::set_var("MEXC_SECRET_KEY", "5df7ced2694b42fd9ec15e8928bea38f");
+    unsafe {
+        std::env::set_var(
+            "RUST_LOG",
+            "mexc_rs=debug,spot_simple_private_subscription_v2=trace",
+        );
+    }
     tracing_subscriber::fmt::init();
 
     dotenv().ok();

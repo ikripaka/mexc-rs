@@ -9,9 +9,9 @@ use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var("RUST_LOG", "trace");
-    std::env::set_var("MEXC_API_KEY", "mx0vglMNhoefH3uXEj");
-    std::env::set_var("MEXC_SECRET_KEY", "5df7ced2694b42fd9ec15e8928bea38f");
+    unsafe {
+        std::env::set_var("RUST_LOG", "mexc_rs=debug,futures_order=trace");
+    }
     tracing_subscriber::fmt::init();
 
     dotenv().ok();

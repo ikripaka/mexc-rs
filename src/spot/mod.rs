@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use hmac::digest::InvalidLength;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use std::sync::Arc;
 
 pub mod v3;
 #[cfg(feature = "ws")]
@@ -95,6 +96,10 @@ impl MexcSpotApiClientWithAuthentication {
             _api_key: api_key,
             secret_key,
         }
+    }
+
+    pub fn into_arc(self) -> Arc<Self> {
+        Arc::new(self)
     }
 
     fn sign_query<T>(&self, query: T) -> Result<QueryWithSignature<T>, SignQueryError>
