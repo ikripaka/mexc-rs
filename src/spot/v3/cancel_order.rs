@@ -5,9 +5,12 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
+pub const DEFAULT_CANCEL_ORDER_RECV_WINDOW: u64 = 7000;
+
 #[derive(Debug)]
 pub struct CancelOrderParams<'a> {
     pub symbol: &'a str,
+    pub recv_window: Option<u64>,
     pub order_id: Option<&'a str>,
     pub original_client_order_id: Option<&'a str>,
     pub new_client_order_id: Option<&'a str>,
@@ -35,7 +38,7 @@ impl<'a> From<CancelOrderParams<'a>> for CancelOrderQuery<'a> {
             order_id: params.order_id,
             original_client_order_id: params.original_client_order_id,
             new_client_order_id: params.new_client_order_id,
-            recv_window: None,
+            recv_window: params.recv_window,
             timestamp: Utc::now(),
         }
     }
@@ -97,6 +100,7 @@ mod tests {
         let client = MexcSpotApiClientWithAuthentication::new_for_test();
         let params = CancelOrderParams {
             symbol: "KASUSDT",
+            recv_window: None,
             order_id: None,
             original_client_order_id: Some("MY_ORDER_ID"),
             new_client_order_id: None,

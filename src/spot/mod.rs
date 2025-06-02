@@ -3,6 +3,7 @@ use hmac::digest::InvalidLength;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::sync::Arc;
+use tracing::info;
 
 pub mod v3;
 #[cfg(feature = "ws")]
@@ -107,6 +108,7 @@ impl MexcSpotApiClientWithAuthentication {
         T: serde::Serialize,
     {
         let query_string = serde_urlencoded::to_string(&query)?;
+        info!("query_string: {}", query_string);
         let mut mac = Hmac::<Sha256>::new_from_slice(self.secret_key.as_bytes())?;
         mac.update(query_string.as_bytes());
         let mac_result = mac.finalize();

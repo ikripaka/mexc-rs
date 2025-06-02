@@ -1,12 +1,17 @@
-use crate::spot::v3::models::Order;
-use crate::spot::v3::{ApiResponse, ApiResult};
-use crate::spot::MexcSpotApiClientWithAuthentication;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+
+use crate::spot::{
+    v3::{models::Order, ApiResponse, ApiResult},
+    MexcSpotApiClientWithAuthentication,
+};
+
+pub const DEFAULT_RECV_WINDOW: u64 = 7000;
 
 #[derive(Debug)]
 pub struct GetOpenOrdersParams<'a> {
     pub symbol: &'a str,
+    pub recv_window: Option<u64>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -20,11 +25,20 @@ pub struct GetOrderQuery<'a> {
     pub timestamp: DateTime<Utc>,
 }
 
+impl<'a> GetOpenOrdersParams<'a> {
+    pub fn from_symbol(symbol: &'a str) -> Self {
+        Self {
+            symbol,
+            recv_window: Some(DEFAULT_RECV_WINDOW),
+        }
+    }
+}
+
 impl<'a> From<GetOpenOrdersParams<'a>> for GetOrderQuery<'a> {
     fn from(params: GetOpenOrdersParams<'a>) -> Self {
         Self {
             symbol: params.symbol,
-            recv_window: None,
+            recv_window: params.recv_window,
             timestamp: Utc::now(),
         }
     }
@@ -69,7 +83,7 @@ mod tests {
     #[tokio::test]
     async fn get_open_orders() {
         let client = MexcSpotApiClientWithAuthentication::new_for_test();
-        let params = GetOpenOrdersParams { symbol: "KASUSDT" };
+        let params = GetOpenOrdersParams::from_symbol("PEPEUSDT");
         let result = client.get_open_orders(params).await;
         eprintln!("{:?}", &result);
         assert!(result.is_ok());

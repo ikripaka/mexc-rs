@@ -8,6 +8,8 @@
 
 It provides a lightweight and easy-to-use interface for interacting with market data, account information, and trading operations.
 
+Main docs for this api is lying here: [link](https://mexcdevelop.github.io/apidocs/spot_v3_en/).
+
 ## Features
 
 - Connect securely using API keys

@@ -5,11 +5,6 @@ use crate::futures::v1::endpoints::get_depth::GetDepth;
 use crate::futures::v1::endpoints::get_kline::GetKline;
 use crate::futures::v1::endpoints::get_open_orders::GetOpenOrders;
 use crate::futures::v1::endpoints::get_server_time::GetServerTime;
-use crate::futures::v1::endpoints::order::Order;
-use crate::futures::v1::endpoints::ticker::GetTicker;
-use crate::futures::ws::public_futures_ws::{
-    MexcFuturesWebsocketClient, MexcFuturesWebsocketClientTrait,
-};
 use chrono::Utc;
 
 pub mod auth;

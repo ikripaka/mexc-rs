@@ -5,11 +5,8 @@ use crate::futures::{
     MexcFuturesApiClient, MexcFuturesApiClientWithAuthentication, MexcFuturesApiEndpoint,
 };
 use async_trait::async_trait;
-use chrono::{DateTime, TimeZone, Utc};
-use num_traits::ToPrimitive;
+use chrono::{DateTime, Utc};
 use reqwest::Client;
-use rust_decimal::Decimal;
-use tracing::info;
 
 #[async_trait]
 pub trait GetDepth {

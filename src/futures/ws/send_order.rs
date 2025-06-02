@@ -2,7 +2,6 @@ use crate::futures::error::ApiError;
 use crate::futures::ws::acquire_websocket::{
     AcquireWebsocketForTopicsError, AcquireWebsocketsForTopics, AcquireWebsocketsForTopicsParams,
 };
-use crate::futures::ws::message::RawChannelMessageData;
 use crate::futures::ws::public_futures_ws::{MexcFuturesWebsocketClient, SendableMessage};
 use crate::futures::ws::topic::{OrderTopic, Topic};
 use crate::futures::ws::WebsocketAuth;

@@ -1,7 +1,9 @@
 use dotenv::dotenv;
-use mexc_rs::spot::v3::cancel_order::{CancelOrderEndpoint, CancelOrderParams};
+use mexc_rs::spot::v3::cancel_order::{
+    CancelOrderEndpoint, CancelOrderParams, DEFAULT_CANCEL_ORDER_RECV_WINDOW,
+};
 use mexc_rs::spot::v3::enums::{OrderSide, OrderType};
-use mexc_rs::spot::v3::order::{OrderEndpoint, OrderParams};
+use mexc_rs::spot::v3::order::{OrderEndpoint, OrderParams, DEFAULT_PLACE_ORDER_RECV_WINDOW};
 use mexc_rs::spot::{MexcSpotApiClientWithAuthentication, MexcSpotApiEndpoint};
 use rust_decimal::Decimal;
 use std::str::FromStr;
@@ -24,9 +26,10 @@ async fn main() -> anyhow::Result<()> {
     // Order low enough to never be filled
     let order_params = OrderParams {
         symbol: "KASUSDT",
+        recv_window: Some(DEFAULT_PLACE_ORDER_RECV_WINDOW),
         side: OrderSide::Buy,
         order_type: OrderType::Limit,
-        quantity: Some(Decimal::from_str("5000")?),
+        quantity: Some(Decimal::from_str("1000")?),
         quote_order_quantity: None,
         price: Some(Decimal::from_str("0.001")?),
         new_client_order_id: None,
@@ -42,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         original_client_order_id: None,
         order_id: Some(order_output.order_id.as_str()),
         new_client_order_id: None,
+        recv_window: Some(DEFAULT_CANCEL_ORDER_RECV_WINDOW),
     };
     client.cancel_order(cancel_order_params).await?;
 

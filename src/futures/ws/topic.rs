@@ -1,4 +1,3 @@
-use crate::spot::ws::message::kline::KlineIntervalTopic;
 use serde::{Deserialize, Serialize};
 use strum::{EnumString, VariantNames};
 

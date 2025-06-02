@@ -1,3 +1,4 @@
+use crate::spot::v3::order::BatchOrderError;
 use crate::spot::SignQueryError;
 use chrono::{DateTime, Utc};
 use num_traits::FromPrimitive;
@@ -63,6 +64,9 @@ pub enum ApiError {
 
     #[error("Sign query error: {0}")]
     SignQueryError(#[from] SignQueryError),
+
+    #[error("Spot max batch order error: {0}")]
+    ExceedMaximumBatchOrder(#[from] BatchOrderError),
 }
 
 impl From<reqwest::Error> for ApiError {

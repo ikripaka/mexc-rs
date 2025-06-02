@@ -2,10 +2,9 @@ use crate::futures::ws::{
     endpoint::MexcFuturesWebsocketEndpoint, message::Message, stream::Stream, subscribe::Subscribe,
     topic::Topic, WebsocketAuth,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,5 @@
 use crate::futures::response::ApiResponse;
 use crate::futures::result::ApiResult;
-use crate::futures::ws::message::PriceQuantityEnum;
 use crate::futures::{
     MexcFuturesApiClient, MexcFuturesApiClientWithAuthentication, MexcFuturesApiEndpoint,
 };
